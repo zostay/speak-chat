@@ -1,0 +1,113 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+
+use autodie;
+use Fcntl ':flock';
+use File::Slurp;
+use Try::Tiny;
+use YAML qw( LoadFile );
+
+my $config;
+
+sub speak(@) {
+    my ($chat_name, $buddy_name, $verb, @messages) = @_;
+
+    my $last_buddy_name = try { read_file("$ENV{HOME}/bin/speak-chat.last") };
+    my $same_buddy = $last_buddy_name eq $buddy_name;
+
+    open my $fh, '>', "$ENV{HOME}/bin/speak-chat.last";
+    flock $fh, LOCK_EX;
+    print $fh $buddy_name;
+
+    $buddy_name =~ s[^[^/]*/][];
+    $buddy_name =~ s{@.*$}{}; 
+    $buddy_name = $config->{Buddies}{Remap}{$buddy_name}
+        if defined $config->{Buddies}{Remap}{$buddy_name};
+
+    my $message;
+    if ($messages[0] =~ s[^\s*/me\s*][]) {
+        $message = join(' ', $buddy_name, @messages);
+    }
+    elsif ($same_buddy) {
+        $message = join(' ', @messages);
+    }
+    else {
+        $message = join(' ', $buddy_name, $verb, @messages);
+    }
+
+    if (length($message) > 300 and $message =~ /[\*\/\\\{\}\@]/) {
+        $message  = substr($message, 0, 300);
+        $message .= '... This looks like a long paste. Stopping.';
+    }
+
+    {
+        open my $fh, '>>', "$ENV{HOME}/bin/speak-chat.log";
+        my $date = localtime;
+        print $fh "[$date] $chat_name: $message\n";
+        close $fh;
+    }
+
+    my @pronunciation_groups 
+        = sort { ($a->{Priority} || 0) <=> ($b->{Priority} || 0) }
+    values %{ $config->{Pronunciations} };
+
+    for my $pronunciation_types (@pronunciation_groups) {
+        my $wrapper = $pronunciation_types->{Wrapper} || '%s';
+        my $terms   = $pronunciation_types->{Terms};
+
+        for my $pronunciation_match (keys %$terms) {
+            my $pronunciation = $terms->{$pronunciation_match};
+            my $match = sprintf $wrapper, $pronunciation_match;
+            try {
+                $message =~ s[$match]["\"$pronunciation\""]msgiee;
+            };
+        }
+    }
+
+    system('say', $message);
+
+    flock $fh, LOCK_UN;
+    close $fh;
+}
+
+try {
+    my $type       = shift @ARGV;
+    my $buddy_name = shift @ARGV;
+    my $chat_name  = shift @ARGV;
+
+    $config        = LoadFile("$ENV{HOME}/bin/speak-chat.conf");
+    # use Data::Dumper;
+    # warn Dumper($config);
+
+    exit if $config->{Stop};
+
+    try { unlink "$ENV{HOME}/debug.log"; };
+
+    my $message;
+    if ($ARGV[0] eq '--') {
+        $message = read_file($ARGV[1]);
+        unlink $ARGV[1];
+    }
+    else {
+        $message = join ' ', @ARGV;
+    }
+
+    if ($type eq 'im') {
+        speak($chat_name => $buddy_name => 'says' => $message);
+    }
+    elsif ($type eq 'invitation') {
+        speak($chat_name => $buddy_name => 'invites you to chat. Says' => $message);
+    }
+    elsif ($type eq 'groupchat' or $type eq 'test') {
+        speak($chat_name => $buddy_name => 'says' => $message);
+    }
+    else {
+        speak($chat_name => $buddy_name => 'says by unknown chat type' => $message);
+    }
+}
+catch {
+    open my $fh, '>>', "$ENV{HOME}/bin/speak-cat.err";
+    print $fh $_;
+    close $fh;
+}

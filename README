@@ -1,0 +1,91 @@
+# README
+
+## PREREQUISITES
+
+This uses Perl. So you need a recent version of Perl (the stock Perl 5.8 that
+comes with every Mac should do fine). You will also need to install:
+
+    autodie
+    File::Slurp
+    Try::Tiny
+    YAML
+
+The best way to do this (in my opinion) is to install `cpanm` and then run:
+
+    cpanm autodie File::Slurp Try::Tiny YAML
+
+## INSTALLATION
+
+To use this script, you need to use iChat. And download these files. Then, do
+the following:
+
+Run this on the command line:
+
+    mkdir ~/bin
+    cp speak-chat ~/bin
+    cp speak-chat.conf ~/bin
+    cp iChatSpeakEvents.scpt ~/Library/Scripts/iChat/
+
+Then, in iChat:
+
+ 1. Then go to iChat > Preferences.
+ 2. Select Event: Message Received
+ 3. Check Run AppleScript and select iChatSpeakEvents.scpt
+ 4. Select Event: Chat Room Message Received
+ 5. Check Run AppleScript and select iChatSpeakEvents.scpt
+ 6. Select Event: Text Invitation
+ 7. Check Run AppleScript and select iChatSpeakEvents.scpt
+
+## CONFIGURATION
+
+Now, you may want to edit `~/bin/speak-chat.conf` to suit. This is written in
+YAML.
+
+### STOP SPEAKING
+
+Anytime you want chats to stop, set the "Stop" option at the top of the file to
+1. Set it to 0 when you want chats to speak again.
+
+### BUDDY MAP
+
+Under `Buddies.Remap`, you can change the names used for your buddies. So, if in
+a chat someone's name is "SomethingAnnoying" you could add:
+
+    Buddies:
+        Remap:
+            "Something Annoying": "Dweeb"
+
+### PRONUNCIATIONS
+
+Under `Pronunciations`, each of the main keys are the title of the section,
+which is just for your benefit. It doesn't really matter. Under each heading you can add three options:
+
+ * **Priority:** This is the order to run the pronunciations in. The higher the
+   number the later they run.
+ * **Wrapper:** This is a Perl regular expression that will be used to wrap
+   every term. Place a `"%s"` in the place you want the term inserted. This can
+   save you lots of typing.
+ * **Terms:** This will map a bunch of strings to match and remap. The keys are
+   actually regular expressions and the values are replacements using the usual
+   Perl syntax for such things.
+
+I've included some examples of commong things that should help you get started.
+
+Oh yeah, and all the regular expressions are set to be case insensitive by
+default.
+
+## KNOWN ISSUES
+
+ * This script uses `flock()` to prevent chats from overlapping. However, the order
+lock is granted by `flock()` is not defined, so if chats pile up, they will
+start to come back out in a jumbled order.
+
+ * If you set Stop, chatting doesn't stop until after all the queued up messages
+have finished.
+
+## TODO
+
+ * Buddies remapping might be nice to have as another set of prunciations.
+ 
+ * It would also be nice if you could select different voices for different 
+buddies.
